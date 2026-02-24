@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-set -e
+# Use an official Python image
+FROM python:3.11-slim
 
-pip install -r requirements.txt
+# Now you HAVE root access to install ffmpeg!
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
-# Install ffmpeg — Render free tier runs Ubuntu so apt is available
-apt-get install -y ffmpeg
+# Set up your app
+WORKDIR /app
+COPY . /app
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Command to run your app (replace with your actual entry point)
+CMD ["gunicorn", "app:app"]
