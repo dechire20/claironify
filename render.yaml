@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: claironly
+    runtime: python
+    buildCommand: bash build.sh
+    startCommand: gunicorn app:app --workers 2 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SERPAPI_KEY
+        sync: false
+    autoDeploy: true
