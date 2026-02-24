@@ -6,8 +6,6 @@ import yt_dlp
 import os, json, re, time, threading, uuid, tempfile, shutil, subprocess
 import urllib.parse, urllib.request
 
-
-# CONFIG
 app = Flask(__name__)
 CORS(app)
 
@@ -64,8 +62,6 @@ def job_set(task_id, **kw):
     with JOBS_LOCK:
         JOBS[task_id].update(kw)
 
-
-# HELPERS
 def detect_platform(url):
     u = url.lower()
     if "tiktok.com"    in u: return "TikTok"
@@ -112,7 +108,6 @@ def trim_video(path, out_dir):
     return path
 
 
-# DOWNLOAD
 def download_video(url, out_dir):
     if re.search(r'tiktok\.com/.+/photo/', url):
         raise ValueError(
@@ -158,7 +153,6 @@ def download_video(url, out_dir):
         return fp, meta
 
 
-# GEMINI
 def gemini_call(prompt, video_file=None):
     parts = []
     if video_file:
@@ -182,7 +176,6 @@ def upload_to_gemini(path):
     return vf
 
 
-# STAGE 1: DESCRIBE
 def stage_describe(video_file):
     print("[Stage 1] Describing...")
     text = gemini_call(
@@ -206,7 +199,6 @@ def stage_describe(video_file):
     return text
 
 
-# STAGE 2: SIGNALS + VERDICT
 def stage_signals_and_verdict(observation, meta):
     print("[Stage 2] Signals + verdict...")
     prompt = f"""You are a senior fact-checker. You have received a detailed observation of a video.
@@ -275,7 +267,6 @@ Respond ONLY with valid JSON — no markdown, no code fences:
     return signals, parsed
 
 
-# STAGE 3: CHALLENGE (conditional)
 def stage_challenge(result, signals):
     verdict    = result.get("verdict")
     confidence = result.get("confidence", 0)
@@ -322,7 +313,6 @@ Respond ONLY with valid JSON:
         return result
 
 
-# STAGE 4: SOURCES (Reddit-first hybrid)
 def build_query(key_claims, title):
     prompt = (
         "Write a single search query (max 10 words) to find news or discussion about these claims.\n"
@@ -343,7 +333,6 @@ def build_query(key_claims, title):
         return " ".join((title+" "+(key_claims[0] if key_claims else ""))[:80].split()[:10])
 
 def pick_subreddits(key_claims, title):
-    """Ask Gemini to pick the most relevant subreddits dynamically based on content."""
     prompt = (
         "You are picking Reddit subreddits to find discussion about this specific video topic.\n\n"
         f"Video title: {title}\n"
@@ -380,7 +369,6 @@ def pick_subreddits(key_claims, title):
         return ["PublicFreakout", "HobbyDrama"]
 
 def _reddit_search(subreddit, query, limit=5):
-    """Search a subreddit using Reddit's public JSON API. No key needed."""
     url = (
         f"https://www.reddit.com/r/{subreddit}/search.json"
         f"?q={urllib.parse.quote_plus(query)}"
@@ -406,7 +394,6 @@ def _reddit_search(subreddit, query, limit=5):
     return results
 
 def _relevance_score(post_name, query_terms):
-    """Score a post title by how many query words appear in it."""
     name_lower = post_name.lower()
     words = [w.lower() for w in query_terms.split() if len(w) > 3]
     if not words:
@@ -414,7 +401,6 @@ def _relevance_score(post_name, query_terms):
     return sum(1 for w in words if w in name_lower) / len(words)
 
 def _fetch_reddit_sources(key_claims, title, subreddits):
-    """Build a tight query, search each subreddit, filter irrelevant results."""
     stop = {"that","this","they","have","with","from","were","been","about","which","their"}
     query_terms = " ".join(
         w for c in key_claims[:2]
@@ -427,14 +413,12 @@ def _fetch_reddit_sources(key_claims, title, subreddits):
     for sub in subreddits:
         try:
             posts = _reddit_search(sub, query_terms)
-            # Filter: must have at least 1 query word in the title
             relevant = [p for p in posts if _relevance_score(p["name"], query_terms) > 0]
             all_posts.extend(relevant)
             print(f"[Reddit] r/{sub}: {len(posts)} results, {len(relevant)} relevant")
         except Exception as e:
             print(f"[Reddit] r/{sub} failed: {e}")
 
-    # Sort by relevance score first, then upvote score
     all_posts.sort(key=lambda p: (
         _relevance_score(p["name"], query_terms),
         p.get("_score", 0)
@@ -482,16 +466,9 @@ def _duckduckgo(query):
     return results
 
 def fetch_sources(key_claims, title):
-    """
-    Reddit-first hybrid:
-    1. Gemini picks relevant subreddits dynamically based on content
-    2. Reddit JSON API fetches real community discussion (no API key)
-    3. News sources from DuckDuckGo/SerpAPI as supplement
-    """
     reddit_sources = []
     news_sources   = []
 
-    # Reddit — dynamic, content-aware
     try:
         subreddits     = pick_subreddits(key_claims, title)
         reddit_sources = _fetch_reddit_sources(key_claims, title, subreddits)
@@ -499,7 +476,6 @@ def fetch_sources(key_claims, title):
     except Exception as e:
         print(f"[Sources] Reddit failed: {e}")
 
-    # News — DuckDuckGo / SerpAPI
     query = build_query(key_claims, title)
     raw = []
     if SERPAPI_KEY:
@@ -518,13 +494,11 @@ def fetch_sources(key_claims, title):
         if len(news_sources) >= 3:
             break
 
-    # Reddit first (community context), then news
     combined = reddit_sources + news_sources
     print(f"[Sources] Total: {len(combined)}")
     return combined[:6] if combined else []
 
 
-# PIPELINE
 def run_pipeline(task_id, video_path, meta):
     tmp_dir    = os.path.dirname(video_path)
     video_path = trim_video(video_path, tmp_dir)
@@ -574,7 +548,6 @@ def run_pipeline(task_id, video_path, meta):
     )
 
 
-# BACKGROUND WORKER
 def background_process(task_id, url, context):
     tmp = tempfile.mkdtemp()
     try:
@@ -591,7 +564,6 @@ def background_process(task_id, url, context):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-# ROUTES
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -625,4 +597,6 @@ self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWi
 """, mimetype="application/javascript")
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8080, debug=True)
+    port = int(os.environ.get("PORT", 8080))
+    debug = os.environ.get("RENDER") is None
+    app.run(host="0.0.0.0", port=port, debug=debug)
