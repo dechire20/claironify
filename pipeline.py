@@ -22,12 +22,12 @@ def run_pipeline(task_id, video_path, meta):
     job_set(task_id, message="Uploading to Gemini...", progress_pct=12)
     vf = upload_to_gemini(video_path)
     job_set(task_id, message="Gemini is watching the video...", progress_pct=22)
-
+    
     try:
         observation = stage_describe(vf)
     finally:
         try:
-            gemini.files.delete(name=vf.name)
+            get_gemini_client().files.delete(name=vf.name)
         except Exception:
             pass
 
