@@ -12,7 +12,7 @@ from analysis import (
     stage_source_correction,
 )
 from sources import fetch_sources
-from config import NEGATIVE_VERDICTS, gemini
+from config import NEGATIVE_VERDICTS, get_gemini_client
 
 
 def run_pipeline(task_id, video_path, meta):
