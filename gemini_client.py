@@ -3,9 +3,14 @@ import re
 import time
 from google.genai import types
 
-from config import gemini, MODEL
+from config import get_gemini_client, MODEL
 
-
+_gemini = None
+def _client():
+    global _gemini
+    if _gemini is None:
+        _gemini = get_gemini_client()
+    return _gemini
 def parse_json(text):
     text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
     text = re.sub(r"\s*```\s*$",        "", text, flags=re.MULTILINE)
