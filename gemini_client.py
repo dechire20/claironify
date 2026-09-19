@@ -5,12 +5,7 @@ from google.genai import types
 
 from config import get_gemini_client, MODEL
 
-_gemini = None
-def _client():
-    global _gemini
-    if _gemini is None:
-        _gemini = get_gemini_client()
-    return _gemini
+
 def parse_json(text):
     text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
     text = re.sub(r"\s*```\s*$",        "", text, flags=re.MULTILINE)
@@ -25,7 +20,7 @@ def gemini_call(prompt, video_file=None):
             file_uri=video_file.uri, mime_type="video/mp4"
         )))
     parts.append(types.Part(text=prompt))
-    resp = gemini.models.generate_content(
+    resp = get_gemini_client().models.generate_content(
         model=MODEL,
         contents=[types.Content(parts=parts)],
     )
@@ -33,13 +28,14 @@ def gemini_call(prompt, video_file=None):
 
 
 def upload_to_gemini(path):
-    vf = gemini.files.upload(
+    client = get_gemini_client()
+    vf = client.files.upload(
         file=path,
         config=types.UploadFileConfig(mime_type="video/mp4")
     )
     while vf.state.name == "PROCESSING":
         time.sleep(1)
-        vf = gemini.files.get(name=vf.name)
+        vf = client.files.get(name=vf.name)
     if vf.state.name == "FAILED":
         raise RuntimeError("Gemini file processing failed")
     return vf
